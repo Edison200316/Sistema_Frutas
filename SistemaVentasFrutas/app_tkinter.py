@@ -13,7 +13,7 @@ def conectar_bd():
         database="frutas",
     )
 
-# Funciones CRUD para productos
+# Funcion del CRUD para los productos
 def agregar_producto():
     nombre = entry_nombre.get()
     precio = entry_precio.get()
@@ -101,7 +101,7 @@ def limpiar_campos_producto():
     entry_precio.delete(0, tk.END)
     entry_stock.delete(0, tk.END)
 
-# Funciones CRUD para clientes
+# Funcion del CRUD para los clientes
 def agregar_cliente():
     nombre = entry_nombre_cliente.get()
     telefono = entry_telefono_cliente.get()
@@ -122,6 +122,53 @@ def agregar_cliente():
         mostrar_clientes()
     else:
         messagebox.showerror("Error", "Todos los campos son obligatorios")
+
+def actualizar_cliente():
+    cliente_id = entry_id_cliente.get()
+    nombre = entry_nombre_cliente.get()
+    telefono = entry_telefono_cliente.get()
+    email = entry_email_cliente.get()
+
+    if cliente_id and nombre and telefono and email:
+        try:
+            conn = conectar_bd()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE ventas_cliente SET nombre=%s, telefono=%s, email=%s WHERE id=%s", (nombre, telefono, email, cliente_id))
+            conn.commit()
+            if cursor.rowcount > 0:
+                messagebox.showinfo("Éxito", "Cliente actualizado correctamente")
+            else:
+                messagebox.showwarning("Atención", "No se encontró un cliente con ese ID")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al actualizar cliente: {e}")
+        finally:
+            conn.close()
+        limpiar_campos_cliente()
+        mostrar_clientes()
+    else:
+        messagebox.showerror("Error", "Todos los campos son obligatorios")
+
+def eliminar_cliente():
+    cliente_id = entry_id_cliente.get()
+
+    if cliente_id:
+        try:
+            conn = conectar_bd()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM ventas_cliente WHERE id=%s", (cliente_id,))
+            conn.commit()
+            if cursor.rowcount > 0:
+                messagebox.showinfo("Éxito", "Cliente eliminado correctamente")
+            else:
+                messagebox.showwarning("Atención", "No se encontró un cliente con ese ID")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al eliminar cliente: {e}")
+        finally:
+            conn.close()
+        limpiar_campos_cliente()
+        mostrar_clientes()
+    else:
+        messagebox.showerror("Error", "El campo ID es obligatorio")
 
 def mostrar_clientes():
     try:
@@ -145,7 +192,7 @@ def limpiar_campos_cliente():
     entry_telefono_cliente.delete(0, tk.END)
     entry_email_cliente.delete(0, tk.END)
 
-# Funciones CRUD para ventas
+# Funcion del CRUD para las ventas
 def agregar_venta():
     producto_id = entry_id_producto_venta.get()
     cliente_id = entry_id_cliente_venta.get()
@@ -155,30 +202,29 @@ def agregar_venta():
         try:
             conn = conectar_bd()
             cursor = conn.cursor()
-            # Verificar si el producto existe
+            # Para verificar si el producto existe
             cursor.execute("SELECT precio FROM ventas_producto WHERE id = %s", (producto_id,))
             producto = cursor.fetchone()
             if not producto:
                 raise ValueError("El ID del producto no existe.")
             precio_producto = producto[0]
-            # Verificar si el cliente existe
+            # Verificamos si el cliente existe
             cursor.execute("SELECT id FROM ventas_cliente WHERE id = %s", (cliente_id,))
             cliente = cursor.fetchone()
             if not cliente:
                 raise ValueError("El ID del cliente no existe.")
             
-            # Calcular el total
+            # Para calcular el total
             total = precio_producto * int(cantidad)
             
-            #obtener la fecha actual
+            #Para obtener la fecha actual
             fecha_venta = datetime.now()
 
-            # Insertar la venta en la base de datos
+            # Para insertar la venta en la base de datos
             cursor.execute("INSERT INTO ventas_venta (producto_id, cliente_id, cantidad, total, fecha) VALUES (%s, %s, %s, %s, %s)", 
                            (producto_id, cliente_id, cantidad, total, fecha_venta))
             conn.commit()
 
-            # Mostrar la venta registrada
             messagebox.showinfo("Éxito", f"Venta registrada correctamente. Total: {total}")
 
         except Exception as e:
@@ -226,7 +272,7 @@ root.configure(bg="#f7f7f7")
 notebook = ttk.Notebook(root)
 notebook.pack(fill="both", expand=True)
 
-# Tab Productos
+# Apartado para los Productos
 tab_productos = tk.Frame(notebook, bg="#ffffff")
 notebook.add(tab_productos, text="Productos")
 
@@ -272,14 +318,14 @@ scrollbar_productos.pack(side="right", fill="y")
 listbox_productos.config(yscrollcommand=scrollbar_productos.set)
 scrollbar_productos.config(command=listbox_productos.yview)
 
-# Tab Clientes
+# Apartado para los Clientes
 tab_clientes = tk.Frame(notebook, bg="#ffffff")
 notebook.add(tab_clientes, text="Clientes")
 
 frame_form_clientes = tk.Frame(tab_clientes, bg="#ffffff", pady=10)
 frame_form_clientes.pack(pady=20)
 
-fields_clientes = ["ID", "Nombre", "Teléfono", "Email"]  # Añadido "ID" y "Email"
+fields_clientes = ["ID", "Nombre", "Teléfono", "Email"]  
 entries_clientes = {}
 for field in fields_clientes:
     label = tk.Label(frame_form_clientes, text=f"{field}:", bg="#ffffff", font=("Arial", 12))
@@ -291,13 +337,15 @@ for field in fields_clientes:
 entry_id_cliente = entries_clientes["ID"]
 entry_nombre_cliente = entries_clientes["Nombre"]
 entry_telefono_cliente = entries_clientes["Teléfono"]
-entry_email_cliente = entries_clientes["Email"]  # Añadido campo de email
+entry_email_cliente = entries_clientes["Email"] 
 
-frame_buttons_clientes = tk.Frame(tab_clientes, bg="#f7f7f7")
-frame_buttons_clientes.pack(pady=10)
+frame_buttons_clientes = tk.Frame(tab_clientes, bg="#f7f7f7", pady=10)
+frame_buttons_clientes.pack(pady=20)
 
 buttons_clientes = [
     ("Agregar Cliente", agregar_cliente),
+    ("Actualizar Cliente", actualizar_cliente),
+    ("Eliminar Cliente", eliminar_cliente),
     ("Mostrar Clientes", mostrar_clientes)
 ]
 
@@ -316,7 +364,7 @@ scrollbar_clientes.pack(side="right", fill="y")
 listbox_clientes.config(yscrollcommand=scrollbar_clientes.set)
 scrollbar_clientes.config(command=listbox_clientes.yview)
 
-# Tab Ventas
+# Apartado para las Ventas
 tab_ventas = tk.Frame(notebook, bg="#ffffff")
 notebook.add(tab_ventas, text="Ventas")
 
