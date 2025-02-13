@@ -1,8 +1,10 @@
 import tkinter as tk
-from tkinter import messagebox
-from tkinter import ttk
+from tkinter import messagebox, ttk
 import mysql.connector
 from datetime import datetime
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import webbrowser
 
 # Conexión a la base de datos
 def conectar_bd():
@@ -13,7 +15,7 @@ def conectar_bd():
         database="frutas",
     )
 
-# Funcion del CRUD para los productos
+# Funciones del CRUD para los productos
 def agregar_producto():
     nombre = entry_nombre.get()
     precio = entry_precio.get()
@@ -91,9 +93,10 @@ def mostrar_productos():
     finally:
         conn.close()
 
-    listbox_productos.delete(0, tk.END)
+    for row in tree_productos.get_children():
+        tree_productos.delete(row)
     for row in rows:
-        listbox_productos.insert(tk.END, f"ID: {row[0]}, Nombre: {row[1]}, Precio: {row[2]}, Stock: {row[3]}")
+        tree_productos.insert("", tk.END, values=row)
 
 def limpiar_campos_producto():
     entry_id.delete(0, tk.END)
@@ -101,7 +104,7 @@ def limpiar_campos_producto():
     entry_precio.delete(0, tk.END)
     entry_stock.delete(0, tk.END)
 
-# Funcion del CRUD para los clientes
+# Funciones del CRUD para los clientes
 def agregar_cliente():
     nombre = entry_nombre_cliente.get()
     telefono = entry_telefono_cliente.get()
@@ -182,9 +185,10 @@ def mostrar_clientes():
     finally:
         conn.close()
 
-    listbox_clientes.delete(0, tk.END)
+    for row in tree_clientes.get_children():
+        tree_clientes.delete(row)
     for row in rows:
-        listbox_clientes.insert(tk.END, f"ID: {row[0]}, Nombre: {row[1]}, Email: {row[2]}, Teléfono: {row[3]}")
+        tree_clientes.insert("", tk.END, values=row)
 
 def limpiar_campos_cliente():
     entry_id_cliente.delete(0, tk.END)
@@ -192,7 +196,7 @@ def limpiar_campos_cliente():
     entry_telefono_cliente.delete(0, tk.END)
     entry_email_cliente.delete(0, tk.END)
 
-# Funcion del CRUD para las ventas
+# Funciones del CRUD para las ventas
 def agregar_venta():
     producto_id = entry_id_producto_venta.get()
     cliente_id = entry_id_cliente_venta.get()
@@ -202,25 +206,19 @@ def agregar_venta():
         try:
             conn = conectar_bd()
             cursor = conn.cursor()
-            # Para verificar si el producto existe
             cursor.execute("SELECT precio FROM ventas_producto WHERE id = %s", (producto_id,))
             producto = cursor.fetchone()
             if not producto:
                 raise ValueError("El ID del producto no existe.")
             precio_producto = producto[0]
-            # Verificamos si el cliente existe
             cursor.execute("SELECT id FROM ventas_cliente WHERE id = %s", (cliente_id,))
             cliente = cursor.fetchone()
             if not cliente:
                 raise ValueError("El ID del cliente no existe.")
             
-            # Para calcular el total
             total = precio_producto * int(cantidad)
-            
-            #Para obtener la fecha actual
             fecha_venta = datetime.now()
 
-            # Para insertar la venta en la base de datos
             cursor.execute("INSERT INTO ventas_venta (producto_id, cliente_id, cantidad, total, fecha) VALUES (%s, %s, %s, %s, %s)", 
                            (producto_id, cliente_id, cantidad, total, fecha_venta))
             conn.commit()
@@ -237,7 +235,6 @@ def agregar_venta():
     else:
         messagebox.showerror("Error", "Todos los campos son obligatorios")
 
-# Función para mostrar las ventas
 def mostrar_ventas():
     try:
         conn = conectar_bd()
@@ -253,20 +250,79 @@ def mostrar_ventas():
     finally:
         conn.close()
 
-    listbox_ventas.delete(0, tk.END)
+    for row in tree_ventas.get_children():
+        tree_ventas.delete(row)
     for row in rows:
-        listbox_ventas.insert(tk.END, f"ID Venta: {row[0]}, Cliente: {row[1]}, Producto: {row[2]}, Cantidad: {row[3]}, Total: ${row[4]}, Fecha: {row[5]}")
+        tree_ventas.insert("", tk.END, values=row)
 
 def limpiar_campos_venta():
     entry_id_producto_venta.delete(0, tk.END)
     entry_id_cliente_venta.delete(0, tk.END)
     entry_cantidad_venta.delete(0, tk.END)
 
+# Función para generar factura
+def generar_factura():
+    venta_id = entry_id_venta.get()
+
+    if not venta_id:
+        messagebox.showerror("Error", "Ingrese un ID de venta válido")
+        return
+
+    try:
+        conn = conectar_bd()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT v.id, c.nombre, c.email, p.nombre, v.cantidad, v.total, v.fecha
+            FROM ventas_venta v
+            JOIN ventas_cliente c ON v.cliente_id = c.id
+            JOIN ventas_producto p ON v.producto_id = p.id
+            WHERE v.id = %s
+        """, (venta_id,))
+        
+        venta = cursor.fetchone()
+        
+        if not venta:
+            raise ValueError("El ID de la venta no existe")
+        
+        factura_id, cliente, email, producto, cantidad, total, fecha = venta
+        nombre_archivo = f"factura_{factura_id}.pdf"
+        
+        c = canvas.Canvas(nombre_archivo, pagesize=letter)
+        c.setFont("Helvetica-Bold", 16)
+        
+        # Encabezado de la factura
+        c.drawString(100, 750, "Tienda de Frutas - Factura")
+        c.setFont("Helvetica", 12)
+        c.drawString(100, 730, f"Factura ID: {factura_id}")
+        c.drawString(100, 710, f"Fecha: {fecha}")
+        c.drawString(100, 690, f"Cliente: {cliente}")
+        c.drawString(100, 670, f"Email: {email}")
+        c.drawString(100, 650, f"Producto: {producto}")
+        c.drawString(100, 630, f"Cantidad: {cantidad}")
+        c.drawString(100, 610, f"Total: ${total}")
+        
+        # Línea separadora
+        c.line(100, 600, 500, 600)
+        
+        # Pie de página
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(100, 580, "Gracias por su compra!")
+        
+        c.save()
+        
+        messagebox.showinfo("Éxito", f"Factura generada: {nombre_archivo}")
+        webbrowser.open_new_tab(nombre_archivo)
+    
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al generar la factura: {e}")
+    
+    finally:
+        conn.close()
 
 # Configuración de la ventana principal
 root = tk.Tk()
 root.title("Sistema de Ventas de Frutas")
-root.geometry("900x700")
+root.geometry("1000x700")
 root.configure(bg="#f7f7f7")
 
 notebook = ttk.Notebook(root)
@@ -310,13 +366,17 @@ for text, command in buttons_productos:
 frame_list_productos = tk.Frame(tab_productos, bg="#ffffff")
 frame_list_productos.pack(pady=20)
 
-listbox_productos = tk.Listbox(frame_list_productos, font=("Arial", 12), width=60, height=15)
-listbox_productos.pack(side="left", padx=10)
+columns_productos = ("ID", "Nombre", "Precio", "Stock")
+tree_productos = ttk.Treeview(frame_list_productos, columns=columns_productos, show="headings", height=10)
+tree_productos.heading("ID", text="ID")
+tree_productos.heading("Nombre", text="Nombre")
+tree_productos.heading("Precio", text="Precio")
+tree_productos.heading("Stock", text="Stock")
+tree_productos.pack(side="left", fill="both", expand=True)
 
-scrollbar_productos = tk.Scrollbar(frame_list_productos)
+scrollbar_productos = ttk.Scrollbar(frame_list_productos, orient="vertical", command=tree_productos.yview)
 scrollbar_productos.pack(side="right", fill="y")
-listbox_productos.config(yscrollcommand=scrollbar_productos.set)
-scrollbar_productos.config(command=listbox_productos.yview)
+tree_productos.configure(yscrollcommand=scrollbar_productos.set)
 
 # Apartado para los Clientes
 tab_clientes = tk.Frame(notebook, bg="#ffffff")
@@ -356,13 +416,17 @@ for text, command in buttons_clientes:
 frame_list_clientes = tk.Frame(tab_clientes, bg="#ffffff")
 frame_list_clientes.pack(pady=20)
 
-listbox_clientes = tk.Listbox(frame_list_clientes, font=("Arial", 12), width=60, height=15)
-listbox_clientes.pack(side="left", padx=10)
+columns_clientes = ("ID", "Nombre", "Teléfono", "Email")
+tree_clientes = ttk.Treeview(frame_list_clientes, columns=columns_clientes, show="headings", height=10)
+tree_clientes.heading("ID", text="ID")
+tree_clientes.heading("Nombre", text="Nombre")
+tree_clientes.heading("Teléfono", text="Teléfono")
+tree_clientes.heading("Email", text="Email")
+tree_clientes.pack(side="left", fill="both", expand=True)
 
-scrollbar_clientes = tk.Scrollbar(frame_list_clientes)
+scrollbar_clientes = ttk.Scrollbar(frame_list_clientes, orient="vertical", command=tree_clientes.yview)
 scrollbar_clientes.pack(side="right", fill="y")
-listbox_clientes.config(yscrollcommand=scrollbar_clientes.set)
-scrollbar_clientes.config(command=listbox_clientes.yview)
+tree_clientes.configure(yscrollcommand=scrollbar_clientes.set)
 
 # Apartado para las Ventas
 tab_ventas = tk.Frame(notebook, bg="#ffffff")
@@ -399,21 +463,36 @@ for text, command in buttons_ventas:
 frame_list_ventas = tk.Frame(tab_ventas, bg="#ffffff")
 frame_list_ventas.pack(pady=20)
 
-listbox_ventas = tk.Listbox(frame_list_ventas, font=("Arial", 12), width=60, height=15)
-listbox_ventas.pack(side="left", padx=10)
+columns_ventas = ("ID Venta", "Cliente", "Producto", "Cantidad", "Total", "Fecha")
+tree_ventas = ttk.Treeview(frame_list_ventas, columns=columns_ventas, show="headings", height=10)
+tree_ventas.heading("ID Venta", text="ID Venta")
+tree_ventas.heading("Cliente", text="Cliente")
+tree_ventas.heading("Producto", text="Producto")
+tree_ventas.heading("Cantidad", text="Cantidad")
+tree_ventas.heading("Total", text="Total")
+tree_ventas.heading("Fecha", text="Fecha")
+tree_ventas.pack(side="left", fill="both", expand=True)
 
-scrollbar_ventas = tk.Scrollbar(frame_list_ventas)
+scrollbar_ventas = ttk.Scrollbar(frame_list_ventas, orient="vertical", command=tree_ventas.yview)
 scrollbar_ventas.pack(side="right", fill="y")
-listbox_ventas.config(yscrollcommand=scrollbar_ventas.set)
-scrollbar_ventas.config(command=listbox_ventas.yview)
+tree_ventas.configure(yscrollcommand=scrollbar_ventas.set)
+
+# Apartado para las Facturas
+tab_facturas = tk.Frame(notebook, bg="#ffffff")
+notebook.add(tab_facturas, text="Facturas")
+
+frame_form_facturas = tk.Frame(tab_facturas, bg="#ffffff", pady=10)
+frame_form_facturas.pack(pady=20)
+
+label_id_venta = tk.Label(frame_form_facturas, text="ID Venta:", bg="#ffffff", font=("Arial", 12))
+label_id_venta.pack(anchor="w", padx=10, pady=5)
+entry_id_venta = tk.Entry(frame_form_facturas, font=("Arial", 12), width=30)
+entry_id_venta.pack(anchor="w", padx=10, pady=5)
+
+frame_buttons_facturas = tk.Frame(tab_facturas, bg="#f7f7f7")
+frame_buttons_facturas.pack(pady=10)
+
+btn_factura = tk.Button(frame_buttons_facturas, text="Generar Factura", command=generar_factura, font=("Arial", 12), bg="#FF5733", fg="#ffffff", relief="flat", width=20)
+btn_factura.pack(pady=5)
 
 root.mainloop()
-
-
-
-
-
-
-
-
-
